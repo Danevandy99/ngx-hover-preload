@@ -1,39 +1,43 @@
+/* eslint-disable @angular-eslint/directive-selector */
 import {
-  Directive, Optional,
+  Directive, HostListener, Optional,
 } from '@angular/core';
 import { RouterLink, RouterLinkWithHref, RouterPreloader } from '@angular/router';
 import { RegistryService } from './registry.service';
 
 
 @Directive({
-  selector: '[routerLink]',
-  host: {
-    '(mouseenter)': 'prefetch()'
-  }
+  selector: '[routerLink]'
 })
 export class LinkDirective {
-  private _rl: RouterLink | RouterLinkWithHref;
+  private routerLink: RouterLink | RouterLinkWithHref;
+
   constructor(
-    private _loader: RouterPreloader,
-    private _registry: RegistryService,
+    private routePreloader: RouterPreloader,
+    private registryService: RegistryService,
     @Optional() link: RouterLink,
     @Optional() linkWithHref: RouterLinkWithHref
   ) {
-    this._rl = link || linkWithHref;
+    this.routerLink = link || linkWithHref;
   }
 
+  @HostListener('mouseenter')
   prefetch() {
     requestIdleCallback(() => {
-      this._registry.add(this._rl.urlTree);
-      this._loader.preload().subscribe(() => void 0);
+      if (this.routerLink.urlTree) {
+        this.registryService.add(this.routerLink.urlTree);
+        this.routePreloader.preload().subscribe(() => void 0);
+      }
     });
   }
 }
 
-type RequestIdleCallbackHandle = any;
+type RequestIdleCallbackHandle = unknown;
+
 type RequestIdleCallbackOptions = {
   timeout: number;
 };
+
 type RequestIdleCallbackDeadline = {
   readonly didTimeout: boolean;
   timeRemaining: (() => number);
@@ -46,16 +50,18 @@ type RequestIdleCallback = ((
 
 const requestIdleCallback: RequestIdleCallback =
   typeof window !== 'undefined'
-    ? (window as any).requestIdleCallback ||
-      function(cb: Function) {
+    ? (window as Window).requestIdleCallback ||
+      ((
+        callback: ((deadline: RequestIdleCallbackDeadline) => void),
+        opts?: RequestIdleCallbackOptions
+      ) => {
         const start = Date.now();
-        return setTimeout(function() {
-          cb({
+
+        return setTimeout(() => {
+          callback({
             didTimeout: false,
-            timeRemaining: function() {
-              return Math.max(0, 50 - (Date.now() - start));
-            }
+            timeRemaining: (() =>  Math.max(0, 50 - (Date.now() - start)))
           });
         }, 1);
-      }
+      })
     : () => {};
